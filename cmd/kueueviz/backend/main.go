@@ -19,12 +19,12 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"os/signal"
 	"syscall"
 
-	"github.com/go-logr/stdr"
+	"github.com/go-logr/logr"
 	"kueueviz/config"
 	"kueueviz/handlers"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -43,13 +43,15 @@ func main() {
 	// Create Kubernetes client
 	dynamicClient, manager, err := createK8sClient(ctx)
 	if err != nil {
-		log.Fatalf("Error creating Kubernetes client: %v", err)
+		slog.Error("Error creating Kubernetes client", "error", err)
+		return
 	}
 
 	// Setup Gin engine with middleware
 	r, err := config.SetupGinEngine()
 	if err != nil {
-		log.Fatalf("Error setting up Gin engine: %v", err)
+		slog.Error("Error setting up Gin engine", "error", err)
+		return
 	}
 
 	srv := &http.Server{
@@ -63,20 +65,23 @@ func main() {
 	h.InitializeWebSocketRoutes(r)
 	h.InitializeAPIRoutes(r, dynamicClient)
 
-	ctrllog.SetLogger(stdr.New(log.Default()))
+	// Set up controller-runtime logging with slog
+	ctrllog.SetLogger(logr.FromSlogHandler(slog.Default().Handler()))
 
 	// Start manager in a separate goroutine
 	go func() {
 		if err = manager.Start(ctx); err != nil {
-			log.Fatalf("Failed to start manager: %v", err)
+			slog.Error("Failed to start manager", "error", err)
+			cancel()
 		}
 	}()
 
 	// Start HTTP server in a separate goroutine
 	go func() {
-		log.Printf("Starting server on %s", srv.Addr)
+		slog.Info("Starting server", "address", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Failed to start HTTP server: %v", err)
+			slog.Error("Failed to start HTTP server", "error", err)
+			cancel()
 		}
 	}()
 
@@ -84,6 +89,6 @@ func main() {
 
 	// Shutdown the server gracefully
 	if err := srv.Shutdown(context.Background()); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		slog.Error("Server forced to shutdown", "error", err)
 	}
 }
