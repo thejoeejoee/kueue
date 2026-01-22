@@ -65,7 +65,7 @@ func (h *Handlers) fetchWorkloadsDashboardData(ctx context.Context, namespace st
 	err := h.client.List(ctx, wql, ctrlclient.InNamespace(namespace))
 
 	if err != nil {
-		slog.Error("Error fetching workloads", "error", err)
+		slog.Error("Error fetching workloads", "namespace", namespace, "error", err)
 		return nil
 	}
 

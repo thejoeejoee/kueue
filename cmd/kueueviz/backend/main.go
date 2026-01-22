@@ -21,6 +21,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 
@@ -44,14 +45,14 @@ func main() {
 	dynamicClient, manager, err := createK8sClient(ctx)
 	if err != nil {
 		slog.Error("Error creating Kubernetes client", "error", err)
-		return
+		os.Exit(1)
 	}
 
 	// Setup Gin engine with middleware
 	r, err := config.SetupGinEngine()
 	if err != nil {
 		slog.Error("Error setting up Gin engine", "error", err)
-		return
+		os.Exit(1)
 	}
 
 	srv := &http.Server{
@@ -73,6 +74,7 @@ func main() {
 		if err = manager.Start(ctx); err != nil {
 			slog.Error("Failed to start manager", "error", err)
 			cancel()
+			os.Exit(1)
 		}
 	}()
 
@@ -82,6 +84,7 @@ func main() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Failed to start HTTP server", "error", err)
 			cancel()
+			os.Exit(1)
 		}
 	}()
 
@@ -90,5 +93,6 @@ func main() {
 	// Shutdown the server gracefully
 	if err := srv.Shutdown(context.Background()); err != nil {
 		slog.Error("Server forced to shutdown", "error", err)
+		os.Exit(1)
 	}
 }
